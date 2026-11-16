@@ -146,6 +146,6 @@ Sparkle command: `/interact sparkles [on|off|herbs|mines|chests|quests]` (option
 
 ## Build & Installation
 
-1. Inject/load `InteractMod.dll` into your WoW 1.12.1 client using your preferred DLL loader.
-2. Copy the contents of `lua/` (`Interact.toc`, `Interact.lua`, `Focus.lua`, `Sparkles.lua`, `Bindings.xml`) into `<WoW>\Interface\AddOns\Interact\`.
+1. Inject/load `InteractMod.dll` into your WoW 1.12.1 client using your preferred launcher.
+2. Copy the contents of `Interact/` (`Interact.toc`, `Interact.lua`, `Focus.lua`, `Sparkles.lua`, `Bindings.xml`) into `<WoW>\Interface\AddOns\Interact\`.
 4. Launch WoW and configure bindings under **Key Bindings Рєњ Interact**, or open settings with `/interact` (or the minimap button).
