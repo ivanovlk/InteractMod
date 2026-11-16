@@ -4,8 +4,11 @@ Interact Mod for Vanilla 1.12.1
 ⚠️ USE AT YOUR OWN RISK — BAN WARNING
 
 Interact modifies client-side interaction behavior, which may violate the Terms of Service of online servers or official game services.
+
 No Anti-Cheat Bypass: This mod does not hide or spoof its activity from anti-cheat systems or server-side behavioral checks.
+
 Account Liability: Using this mod in online or multiplayer environments can result in temporary suspensions or permanent account bans.
+
 By downloading, installing, or using Interact, you acknowledge these risks and accept full responsibility for any actions taken against your account. The developer is not liable for lost accounts, characters, or progress.
 
 
