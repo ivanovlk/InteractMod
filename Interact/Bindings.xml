@@ -1,0 +1,20 @@
+<Bindings>
+    <Binding name="Interact" header="INTERACT">
+        Interact_Trigger(0)
+    </Binding>
+    <Binding name="Interact (auto-loot)">
+        Interact_Trigger(1)
+    </Binding>
+    <Binding name="Blacklist Current Prompt / Target">
+        Interact_BlacklistCurrent()
+    </Binding>
+    <Binding name="Set Focus (Current Target)">
+        Interact_SetFocus()
+    </Binding>
+    <Binding name="Clear Focus">
+        Interact_ClearFocus()
+    </Binding>
+    <Binding name="Target Focus">
+        Interact_TargetFocus()
+    </Binding>
+</Bindings>

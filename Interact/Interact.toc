@@ -1,0 +1,13 @@
+## Interface: 11200
+## Title: Interact |cff808080by luskanek
+## Author: luskanek
+## Notes: Interact Key from Retail ported to Vanilla.
+## Version: 2.0.0
+## SavedVariables: InteractDB
+## SavedVariablesPerCharacter: InteractCharDB
+
+Interact.lua
+Focus.lua
+Sparkles.lua
+
+Bindings.xml
