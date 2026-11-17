@@ -366,7 +366,7 @@ local function SetConfigValue(key, value)
    elseif key == 'promptAlpha' then
       value = tonumber(value) or DEFAULT_CONFIG.promptAlpha
       value = math.floor(value * 20 + 0.5) / 20
-      if value < 0.2 then value = 0.2 end
+      if value < 0.0 then value = 0.0 end
       if value > 1.0 then value = 1.0 end
    elseif key == 'minimapAngle' then
       value = tonumber(value) or DEFAULT_CONFIG.minimapAngle
@@ -1038,7 +1038,7 @@ local function BuildConfigUI()
    CreateSlider(t3, 'InteractPromptXSlider', 'promptX', 'Prompt X Offset', 'Prompt X: %d px', -600, 600, 5, '-600', '600', 26, -82)
    CreateSlider(t3, 'InteractPromptYSlider', 'promptY', 'Prompt Y Offset', 'Prompt Y: %d px', -450, 450, 5, '-450', '450', 248, -82)
    CreateSlider(t3, 'InteractPromptScaleSlider', 'promptScale', 'Prompt Scale', 'Prompt Scale: %.2fx', 0.7, 1.5, 0.05, '0.7x', '1.5x', 26, -126)
-   CreateSlider(t3, 'InteractPromptAlphaSlider', 'promptAlpha', 'Prompt Opacity', 'Prompt Alpha: %.2f', 0.2, 1.0, 0.05, '0.2', '1.0', 248, -126)
+   CreateSlider(t3, 'InteractPromptAlphaSlider', 'promptAlpha', 'Prompt Frame Opacity', 'Frame Alpha: %.2f', 0.0, 1.0, 0.05, '0.0', '1.0', 248, -126)
    CreateSlider(t3, 'InteractSparkleFovSlider', 'sparkleFov', 'Sparkle Projection', 'Sparkle Projection: %d (90=Default)', 40, 150, 1, '40', '150', 26, -170)
    CreateCheckbox(t3, 'InteractCBSparkleHerbs',  'sparkleHerbs',  'Herbs',  'Show 3D world sparkles over nearby herbalism nodes.', 248, -156)
    CreateCheckbox(t3, 'InteractCBSparkleMines',  'sparkleMines',  'Mines',  'Show 3D world sparkles over nearby mining mineral veins.', 348, -156)
@@ -1938,9 +1938,14 @@ UpdatePromptStyle = function()
    local alpha = InteractDB.config.promptAlpha or 0.72
    promptFrame:SetScale(scale)
    promptFrame:SetBackdropColor(0, 0, 0, alpha)
+   local br, bg, bb = promptFrame.borderR or 0.6, promptFrame.borderG or 0.6, promptFrame.borderB or 0.6
+   promptFrame:SetBackdropBorderColor(br, bg, bb, alpha)
    for idx = 2, 3 do
-      if promptStackFrames[idx] then
-         promptStackFrames[idx]:SetBackdropColor(0, 0, 0, alpha * 0.9)
+      local sf = promptStackFrames[idx]
+      if sf then
+         sf:SetBackdropColor(0, 0, 0, alpha * 0.9)
+         local sr, sg, sb = sf.borderR or 0.5, sf.borderG or 0.5, sf.borderB or 0.5
+         sf:SetBackdropBorderColor(sr, sg, sb, alpha)
       end
    end
    local canDrag = (not InteractDB.config.lockPrompt) or (InteractConfigFrame and InteractConfigFrame:IsVisible())
@@ -2605,13 +2610,15 @@ eventFrame:SetScript('OnUpdate', function()
    end
 
    local key = cachedInteractKey or 'Interact'
+   local promptAlpha = (InteractDB and InteractDB.config and InteractDB.config.promptAlpha) or 0.72
    if name and name ~= '' then
       local verb = actionType or 'Interact'
       local textStr = dist and string.format('[%s] %s %s (%.1f yd)', key, verb, name, dist) or string.format('[%s] %s %s', key, verb, name)
       if verb ~= lastPromptVerb then
          local col = ACTION_COLORS[verb] or ACTION_COLORS.Interact
          promptText:SetTextColor(col[1], col[2], col[3])
-         promptFrame:SetBackdropBorderColor(col[1], col[2], col[3], 0.85)
+         promptFrame.borderR, promptFrame.borderG, promptFrame.borderB = col[1], col[2], col[3]
+         promptFrame:SetBackdropBorderColor(col[1], col[2], col[3], promptAlpha)
          lastPromptVerb = verb
       end
       if textStr ~= lastPromptText then
@@ -2636,7 +2643,8 @@ eventFrame:SetScript('OnUpdate', function()
                if sv ~= lastStackVerbs[idx] then
                   local scol = ACTION_COLORS[sv] or ACTION_COLORS.Interact
                   sf.text:SetTextColor(scol[1], scol[2], scol[3])
-                  sf:SetBackdropBorderColor(scol[1], scol[2], scol[3], 0.75)
+                  sf.borderR, sf.borderG, sf.borderB = scol[1], scol[2], scol[3]
+                  sf:SetBackdropBorderColor(scol[1], scol[2], scol[3], promptAlpha)
                   lastStackVerbs[idx] = sv
                end
                if stext ~= lastStackTexts[idx] then
@@ -2660,7 +2668,8 @@ eventFrame:SetScript('OnUpdate', function()
       local prevText = string.format('[%s] Interact Prompt Preview (Drag Me)', key)
       if lastPromptVerb ~= '__PREVIEW__' then
          promptText:SetTextColor(1, 0.82, 0.25)
-         promptFrame:SetBackdropBorderColor(1, 0.82, 0.25, 0.85)
+         promptFrame.borderR, promptFrame.borderG, promptFrame.borderB = 1, 0.82, 0.25
+         promptFrame:SetBackdropBorderColor(1, 0.82, 0.25, promptAlpha)
          lastPromptVerb = '__PREVIEW__'
       end
       if prevText ~= lastPromptText then
