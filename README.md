@@ -1,16 +1,13 @@
-# InteractMod
-Interact Mod for Vanilla 1.12.1
+# InteractMod — User Guide (WoW 1.12.1)
 
-⚠️ USE AT YOUR OWN RISK — BAN WARNING
-
-Interact modifies client-side interaction behavior, which may violate the Terms of Service of online servers or official game services.
-
-No Anti-Cheat Bypass: This mod does not hide or spoof its activity from anti-cheat systems or server-side behavioral checks.
-
-Account Liability: Using this mod in online or multiplayer environments can result in temporary suspensions or permanent account bans.
-
-By downloading, installing, or using Interact, you acknowledge these risks and accept full responsibility for any actions taken against your account. The developer is not liable for lost accounts, characters, or progress.
-
+> ### ⚠️ USE AT YOUR OWN RISK — BAN WARNING
+>
+> **Interact** modifies client-side interaction behavior, which may violate the Terms of Service of online servers or official game services.
+>
+> - **No Anti-Cheat Bypass:** This mod does not hide or spoof its activity from anti-cheat systems or server-side behavioral checks.
+> - **Account Liability:** Using this mod in online or multiplayer environments can result in temporary suspensions or permanent account bans.
+>
+> By downloading, installing, or using **Interact**, you acknowledge these risks and accept full responsibility for any actions taken against your account. The developer is not liable for lost accounts, characters, or progress.
 
 <img width="1951" height="1313" alt="image" src="https://github.com/user-attachments/assets/82f61228-543b-460c-8987-45602248d015" />
 <img width="620" height="710" alt="image" src="https://github.com/user-attachments/assets/ecca1952-ce3a-4fca-9f8a-da272e293c5a" />
@@ -18,144 +15,122 @@ By downloading, installing, or using Interact, you acknowledge these risks and a
 <img width="621" height="711" alt="image" src="https://github.com/user-attachments/assets/17ac62ff-fe6f-48e4-96d1-d9ad9670ffa2" />
 <img width="622" height="714" alt="image" src="https://github.com/user-attachments/assets/03ca0809-d42a-43d4-b9e9-bca1e6ea659f" />
 
+---
 
-## Features
-
-### 1. Smart Interaction & Target Selection (C++)
-- **Cone & Proximity Scoring:** Evaluates candidates within configurable cone half-angle (`15+-РђЊ180+-`), close-proximity bypass radius (`0РђЊ8 yd`), and vertical Z-axis difference (`0РђЊ20 yd`, prevents targeting across floors/ceilings).
-- **Camera-Relative Cone (`cameraCone`):** Optional toggle to aim the selection cone along the camera forward vector instead of character facing.
-- **Line-of-Sight Check (`losCheck`):** Uses `CWorld::Intersect` (`0x672170`) to skip enemies, corpses, and gatherables (`goType == 3`) blocked by walls or terrain, while allowing interaction with mailboxes and town NPCs across counters.
-- **Priority Tiers & Target Cycling:** Ranks lootable corpses, combat enemies, questgivers, gatherables, and NPCs; applies a configurable `cycleTime` penalty (`0РђЊ10000 ms`) to recently interacted GUIDs while exempting newly-killed lootable corpses so you can loot immediately.
-- **Hard Target Handling:** Honors your valid current hard target, with `skipLootedTarget` to fall back to scanning when a dead target has no loot/skin.
-- **Raid Mark Priority & CC Protection:** Boosts `Skull`/`Cross` targets (`raidMarkPriority`) and skips `Moon`/`Square`/`Star`/`Diamond` CC'd targets (`protectCCMarks`).
-- **Questgiver OOC Priority (`prioritizeQuestOOC`):** Ranks Questgiver NPCs and GameObjects above enemies while out of combat.
-- **Prioritize Low-HP Enemies (`prioritizeLowHP`):** In combat, adds a `+1500.0` score boost to living enemies below 25% HP for faster execute/finish targeting.
-- **Prioritize Casting Enemies (`prioritizeCasting`):** In combat, adds a `+1200.0` score boost to living enemies currently casting or channeling a spell.
-- **Skip Tapped Enemies (`ignoreTapped`):** Skips living enemies out of combat that are tagged by another player (`UNIT_DYNFLAG_OTHER_TAGGER`).
-- **Restore Previous Target (`restoreTarget`):** Re-targets your previous target after interacting.
-
-### 2. Creature & World Object Filtering
-- **Creatures & Combat:** `interactEnemies`, `lootInCombat`, `prioritizeLoot`, `interactPlayers`, `ignorePassiveNPC`, `enemyPlayersOOC`, `ignoreCritters` (`CREATURE_TYPE_CRITTER = 8`).
-- **Gatherables:** Separate toggles for `ignoreHerbs`, `ignoreOre`, `ignoreChests`, and `ownBobberOnly` (ignore other players' fishing bobbers).
-- **World Objects:** Individual filters for `ignoreChairs`, `ignoreSpellFocus` (campfires/forges/anvils), `ignoreMailboxes`, `ignoreDoors`, `ignoreRituals` (summoning portals), `ignoreGoobers`, and `ignoreOtherGOs`.
-- **Named Blacklist Manager:** Persistent entry ID blacklist (supports both GameObjects and NPCs) with a 5-row paged UI, one-click removal, and `BL Prompt/Last` (`/interact bltarget`).
-
-### 3. Soft-Target On-Screen Prompt & Multi-Target Stack
-- Polls `CMD_QUERY_NEAREST` (`300`) or `CMD_QUERY_STACK` (`301`) every `0.1s` and displays `[Keybind] <Action> <Name> (<dist> yd)`.
-- **Multi-Target Prompt Stack (`showPromptStack`):** Shows up to 2 extra nearby candidates below the main prompt; clicking row 2 or 3 triggers `CMD_INTERACT_INDEX` (`302`) (and auto-dismounts if `autoDismount` is enabled) to interact directly with that target.
-- **Action-Colored:** Color-codes text and border by verb (`Attack`, `Loot`, `Gather`, `Skin`, `Talk`, `Reel`, `Mailbox`).
-- **Customizable:** Draggable on screen (with `lockPrompt` toggle), live preview when `/interact` is open on **Tab 3 (`Prompt & Blacklist`)**, and sliders for `promptX`, `promptY`, `promptScale` (`0.7xРђЊ1.5x`), and `promptAlpha` (`0.2РђЊ1.0`).
-
-### 4. 3D-Projected World Sparkles (`showSparkles`)
-- Projects nearby `GameObject` positions from 3D world space onto `WorldFrame` using `Game::WorldToScreen` (`CGCamera` at `CUR_WORLD_FRAME + 0x65B8`) via `CMD_QUERY_SPARKLES` (`303`).
-- **Color-Coded Categories (with per-category checkboxes in Tab 3):**
-  - **Herbs (`sparkleHerbs`):** Emerald green
-  - **Mines (`sparkleMines`):** Icy cyan
-  - **Chests (`sparkleChests`):** Gold
-  - **Quest Objects (`sparkleQuests`):** Bright amber Рђћ automatically matched against your active Quest Log objectives (`QUEST_LOG_UPDATE`) so books, crates, and quest props sparkle when needed.
-- **Projection Calibration (`sparkleFov`):** Adjustable `Sparkle Projection` slider (`40РђЊ150`, default `90`) on Tab 3 to fine-tune vertical projection for custom aspect ratios or FoV mods.
-
-### 5. Classic Blizzard-Style Focus Target Grid (Up to 9 Slots, 3+Ќ3) & Leader Sync
-- **C++ GUID Tracking (`400`РђЊ`409`):** Stores `s_focusGuids[9]` in memory and polls live unit data for slots `1..9` without changing your current target.
-- **3+Ќ3 Column-Major Grid Layout:**
-  - **Column 1:** Focus 1 (`InteractFocusFrame`, master anchor) Рєњ Focus 2 Рєњ Focus 3 stacked vertically.
-  - **Column 2:** Focus 4 Рєњ Focus 5 Рєњ Focus 6 placed immediately to the right of Column 1.
-  - **Column 3:** Focus 7 Рєњ Focus 8 Рєњ Focus 9 placed immediately to the right of Column 2.
-  - **Live 9-Frame Grid Preview & Scaling (`0.40xРђЊ1.50x`):** While `/interact` is open on **Tab 4 (`Focus`)**, all 9 Focus frames are displayed as interactive previews so you can visualize the full 3+Ќ3 footprint and drag **any** of the 9 frames to reposition the entire grid.
-- **Compact Mini-Bar Mode (`compactFocus`):** Dynamically switches all 9 Focus frames between the full `232+Ќ100` Blizzard `TargetFrame` and a sleek `148+Ќ42` gold-bordered raid-style bar (Raid Icon + Name + Distance on top, HP% + Combat Icon in the middle, Power bar at the bottom, plus compact auras and castbar underneath).
-- **Auto-Populate from Raid Target Marks (`autoFocusMarks` / `/focusmarks`):**
-  - `CMD_FOCUS_POPULATE_MARKS` (`409`) reads `Offsets::RAID_TARGET_ICONS` (`0xB71368`) and maps `Skull` (8) Рєњ Focus 1, `Cross` (7) Рєњ Focus 2, `Square` (6) Рєњ Focus 3, `Moon` (5) Рєњ Focus 4, `Triangle` (4) Рєњ Focus 5, `Diamond` (3) Рєњ Focus 6, `Circle` (2) Рєњ Focus 7, and `Star` (1) Рєњ Focus 8.
-  - Can run automatically every `0.5s` (`autoFocusMarks`) or on demand via `/focusmarks`, the **Marks** button in Tab 4, or the Minimap right-click menu.
-- **Modifier Click-Casting with Spellbook Picker (`focusShiftSpell`, `focusCtrlSpell`, `focusAltSpell`):**
-  - Pick any spell directly from your character's Spellbook in `/interact` Рєњ **Focus** for **Shift+Left-Click**, **Ctrl+Left-Click**, and **Alt+Left-Click** (shows live spell icons; Right-Click a picker button to clear).
-  - Modifier-clicking any Focus frame (`1..9`) casts that spell directly on that Focus unit via `CMD_FOCUS_SWAP` / `CMD_FOCUS_RESTORE` without losing your current target.
-- **Focus Cast / Interrupt Alerts (`focusCastAlert`, `focusCastSound`):**
-  - **Flash Frame on Cast (`focusCastAlert`):** Glows and blinks the specific Focus frame (`1..9`) red (border, portrait, and bars in full mode; frame border and background in compact mode) while that unit is casting or channeling a spell.
-  - **Sound Alert on Cast Start (`focusCastSound`):** Plays a `RaidWarning` alert when any Focus unit begins casting.
-- **Auto-Clear Dead Focus (`autoClearDeadFocus`) & Range/LoS Dimming (`dimOutOfRangeFocus`):**
-  - **Auto-Clear Dead Focus:** Automatically clears Focus slots when a non-player target dies (`hp <= 0`), keeping slots free for `/autofocus`.
-  - **Dim Out-of-Range / No-LoS:** Dims Focus frames to 45% opacity when the unit is `>40 yd` away or out of Line of Sight.
-- **Performance & Hardening:**
-  - Unassigned Focus slots skip `CMD_FOCUS_QUERY` polling; LoS raycasts and aura icon formatting are cached for `250ms` per slot in C++.
-  - Sparkles scan at `15 Hz` with `30 Hz` animation and early-out when disabled; prompt text/color/keybind lookups are cached in Lua.
-  - Synced Focus GUIDs are range-checked, type-validated (`UNIT`/`PLAYER`), rate-limited per leader, and name-sanitized.
-- **Party / Raid Leader Addon Sync (`syncFocusGroup`):**
-  - When the **Party Leader** (`IsPartyLeader`) or **Raid Leader** (`IsRaidLeader`, rank 2) sets or clears any Focus slot (`1..9`), the exact 64-bit unit GUID (`low32` + `high32` via `CMD_FOCUS_GET_GUID = 408`) and unit name are broadcast over `SendAddonMessage("IM_FOCUS", ...)` on `PARTY` / `RAID`.
-  - Group members verify leader authority (`UnitIsPartyLeader` / `GetRaidRosterInfo` rank 2) and call `CMD_FOCUS_SET_GUID` (`407`), overriding local slot assignments with the exact unit GUID (even when multiple mobs share the same name).
-  - Leaders can also broadcast all 9 slots at once via `/fsync`, the **Broadcast** button in Tab 4, or the Minimap right-click context menu.
-- **`InteractFocusFrame`:** Built with classic Blizzard `TargetFrame` textures (including Elite, Rare, Rare-Elite, and Boss dragon borders), class/creature-type portrait icons, reaction-colored name bar, HP/Power bars, level/combat icon, raid mark icon, distance + `(No LoS)` warning, and `Out of Range` / `Dead` states.
-- **Focus Buffs & Debuffs (`showFocusAuras`):** Reads active unit aura slots (`CGUnit_C` descriptors + `SpellIcon.dbc` at `0x00C0D7EC`) and displays up to 8 buffs (row 1) and 8 debuffs (row 2, red border) with stack counts below the Focus frame (configurable in Tab 4).
-- **Friendly Party/Raid UnitId Fallback:** When the focused unit is a friendly player in your party or raid (`party1`РђЊ`party4`, `raid1`РђЊ`raid40`), `InteractFocusFrame` also resolves their live UnitId for native Blizzard portrait/cast/aura/range integration.
-- **Target-of-Focus (`InteractFocusToTFrame`):** Classic clickable `TargetofTargetFrame` showing who your focus is targeting and their HP% (Left-Click targets your focus's target).
-- **Focus Castbar (`InteractFocusCastBar`):** Reads `CGUnit_C` cast/channel spell ID (`0xC8C` / `UNIT_CHANNEL_SPELL`) and `Spell.dbc` (`0x00C0D788`) to display the spell icon, spell name, elapsed time, and cast (gold) vs channel (blue) progress bar.
-- **Interactions:** Left-Click to target focus, Shift/Ctrl/Alt+Left-Click to cast bound spell, Right-Click to clear focus, Drag any Focus frame (`1..9`) to move the entire grid when unlocked or when `/interact` is open.
-
-### 6. Profiles, Automation & QoL
-- **Quick Profiles:** Built-in `Questing`, `Dungeon / Raid`, `Gathering`, and `City / Safe` presets (with active profile highlighted in green in the top bar).
-  - **Left-Click:** Apply profile
-  - **Shift+Left-Click:** Save current settings to that profile (`InteractDB.profiles`)
-  - **Right-Click:** Reset profile to built-in defaults
-- **Safe Reset Confirmation:** Clicking **Reset Defaults** prompts a confirmation dialog (`INTERACT_RESET_CONFIRM`) before clearing custom profiles, settings, and blacklist entries.
-- **Per-Character Active Profile:** Stored in `InteractCharDB` (`SavedVariablesPerCharacter`) so each character remembers its own active profile on login.
-- **Custom Profiles & Export/Import:** Create, load, and delete custom named profiles, or share settings via `IM1:...` strings.
-- **Zone Auto-Switching (`autoProfile`):** Automatically applies `raid` in instances, `city` in capitals, and `questing` elsewhere.
-- **Auto-Dismount (`autoDismount`):** Cancels mount buff before interacting with a nearby target.
-- **Interact-to-Fish (`interactToFish`) & Interact-to-Mount (`interactToMount`):** Casts `Fishing` with a Fishing Pole equipped, or mounts up out of combat, when pressing Interact with no target in range.
-- **Merchant QoL (`autoSellGrey`, `autoRepair`):** Automatically sells poor-quality (grey) items and repairs equipment when opening a vendor.
-- **Minimap Button (`showMinimap`):** Draggable button around `Minimap` (Left-Click opens `/interact`, Right-Click opens a context menu with **Broadcast Focus 1..9**, **Clear All Focus (1..9)**, and quick profile switching).
-- **Version Reporting (`v2.0.0`):** `INTERACTMOD_VERSION` (`CMD_GET_VERSION = 202`) and `ADDON_VERSION` are displayed in the `/interact` title and printed to chat on `PLAYER_LOGIN`.
+**InteractMod** brings modern **Interact Key** targeting, an **On-Screen Soft-Target Prompt**, **3D World Sparkles** for gathering and quest objects, and a **9-Slot Focus Target Grid** (with Castbars, Buffs/Debuffs, Crowd-Control Tracking, Click-Casting, and Party/Raid Leader Sync) to World of Warcraft 1.12.1.
 
 ---
 
-## Slash Commands & Keybindings
+## Quick Start & Installation
 
-### General (`/interact` or `/im`)
-| Command | Description |
+1. **Load the Mod DLL:** Place or load `InteractMod.dll` with your WoW 1.12.1 client / launcher (e.g., add `InteractMod.dll` to your DLL loader or `dlls.txt`).
+2. **Install the Addon:** Copy the addon files (`Interact.toc`, `Interact.lua`, `Focus.lua`, `Sparkles.lua`, `Bindings.xml`) into:
+   `<WoW Folder>\Interface\AddOns\Interact\`
+3. **Bind Your Keys:** In-game, open **Main Menu (Esc) → Key Bindings → Interact** and bind:
+   - **Interact** or **Interact (auto-loot)** (e.g. `E` or `F`)
+   - **Set Focus (Current Target)**, **Target Focus**, and **Clear Focus** (optional)
+4. **Open Settings:** Type `/interact` (or `/im`) in chat, or **Left-Click the Minimap Button** to open the 4-tab configuration window.
+
+---
+
+## Core Features
+
+### 1. Smart Interact Key
+Press a single key to automatically interact with the best nearby target in front of you:
+- **Loot & Gather:** Loot corpses, gather herbs, mine ore veins, chop trees/lumber nodes, open chests, and skin beasts.
+- **Quest & Town NPCs:** Talk to quest givers, flight masters, vendors, trainers, bankers, and innkeepers (prioritizes active quest NPCs out of combat).
+- **Combat Targeting:** Target and engage nearby enemies in combat, with optional priority for **Casting Enemies** (for quick interrupts), **Low-HP Enemies** (for execute/cleanup), and **Raid-Marked Targets** (`Skull` → `Cross`).
+- **Crowd-Control Protection:** Automatically avoids breaking sheep/trap/shackle targets marked with `Moon`, `Square`, or `Diamond` during combat.
+- **Fishing & Bobbers:** Reels in your own fishing bobber when splashed (ignoring other players' bobbers), and can optionally start **Fishing** automatically when pressing Interact with a Fishing Pole equipped and nothing nearby.
+- **Target Cycling & Restore:** Pressing Interact repeatedly cycles through nearby targets instead of getting stuck on the same one, and can optionally restore your previous combat target after looting or gathering.
+
+---
+
+### 2. On-Screen Soft-Target Prompt & Multi-Target List
+Shows a live on-screen indicator of what your Interact key will do before you press it:
+- **Main Prompt:** Displays `[Key] <Action> <Target Name> (<Distance> yd)`, color-coded by action (`Loot`, `Gather`, `Skin`, `Talk`, `Attack`, `Reel`, `Mailbox`).
+- **Multi-Target Stack (Rows 2 & 3):** Displays up to 2 additional nearby interactable targets below the main prompt — **Left-Click** row `2.` or `3.` to interact directly with that target (automatically dismounts if Auto-Dismount is enabled).
+- **Fully Customizable (Tab 3 — `Prompt & BL`):**
+  - Drag the prompt anywhere on screen (or adjust X/Y sliders).
+  - Adjust **Prompt Scale** (`0.7x`–`1.5x`) and **Prompt Frame Opacity** (`0.0`–`1.0`) — set opacity to `0.0` if you want floating text with a completely transparent frame and border.
+
+---
+
+### 3. 3D World Sparkles for Gathering & Quests
+Highlights important objects directly in the 3D game world so you can spot them from up to 55 yards away:
+- **5 Color-Coded Categories (individually toggleable in Tab 3):**
+  - **Herbs:** Emerald Green
+  - **Mines (Ore Veins):** Icy Cyan
+  - **Trees (Lumber / Woodcutting):** Leaf Lime-Green
+  - **Chests & Footlockers:** Gold
+  - **Active Quest Objects:** Bright Amber — automatically reads your Quest Log and highlights crates, books, and objects needed for your current quests.
+- **3D Distance Scaling & Smooth Motion:** Sparkles stay locked smoothly onto 3D objects while moving, scale larger as you get closer, and fade gently at long range.
+- **Node Nameplates (`<Name> (< yd>)`):** Hover your mouse over any sparkle, look directly toward the primary node near the center of your screen, or hold **`Alt`** to display the object's name and distance below the sparkle.
+
+---
+
+### 4. Focus Target Grid (Up to 9 Targets, 3×3)
+Track up to 9 units simultaneously without changing your current target:
+- **Classic or Compact Mini-Bar Layout (Tab 4 — `Focus`):**
+  - **Full Mode:** Classic Blizzard target frame (`Name`, `HP`, `Mana/Rage/Energy`, `Level / Combat Icon`, `Class / Creature Portrait`, `Elite / Rare Dragon Border`, `Raid Mark`, `Distance & Line-of-Sight Warning`, and clickable **Target-of-Focus**).
+  - **Compact Mini-Bar Mode:** Sleek raid-style bars (`148×42`) ideal for tracking 3 to 9 targets at once.
+  - **Live 3×3 Grid Preview:** Open `/interact` and switch to **Tab 4 (`Focus`)** to preview all 9 frames and drag any frame to reposition the entire grid.
+- **Full-Duration Focus Castbars & Cast Alerts:**
+  - Displays the spell icon, spell name, `elapsed / total` cast time, and a smooth progress bar (gold filling for casts, blue draining for channels).
+  - **Whole-Frame Red Cast Glow:** When a focused enemy begins casting or channeling, that specific Focus frame glows and pulses bright red (with an optional warning sound) so you never miss an interrupt.
+- **Crowd-Control (CC) Countdown Badge & Break Alert:**
+  - Automatically detects active CC on any Focus target (`Polymorph`, `Sap`, `Hibernate`, `Shackle Undead`, `Banish`, `Freezing Trap`, `Wyvern Sting`, `Blind`, `Gouge`, `Seduction`, `Fear`, `Psychic Scream`, `Howl of Terror`, `Turn Undead`, `Repentance`, `Hammer of Justice`, `Entangling Roots`, `Sleep`, `Mind Control`, `Enslave Demon`).
+  - Shows a large **CC Icon + Live Countdown Timer** on the Focus frame (turning red when `<= 6s` remain).
+  - Alerts you immediately with a flashing **`! <CC> BROKE !`** banner, sound, and chat message if a CC breaks early on a living Focus target.
+- **Focus Buffs & Debuffs with Hover Tooltips:**
+  - Shows up to 8 buffs and 8 debuffs below each Focus frame.
+  - **Hover any buff/debuff** to view its spell name, rank, dispel type (`Magic`, `Curse`, `Disease`, `Poison`), and stack count.
+  - Spells from **your own class/Spellbook** are highlighted with a bright green border (buffs) or orange-gold border (debuffs).
+- **Modifier Click-Casting & Range/Cooldown Badges:**
+  - In **Tab 4 (`Focus`)**, pick any spell directly from your character's Spellbook for **Shift+Left-Click**, **Ctrl+Left-Click**, and **Alt+Left-Click** (Right-Click a picker button to clear).
+  - Modifier-clicking any Focus frame (`1..9`) casts that spell on that Focus target and automatically restores your previous target.
+  - Mini **`S` / `C` / `A` Spell Badges** at the top-right of each Focus frame show live readiness: **Green border** when ready & in range, **Red tint** when out of range, or **Cooldown seconds** when on cooldown.
+- **Auto-Populate from Raid Marks & Party/Raid Leader Sync:**
+  - **Raid Marks → Focus (`1..8`):** Automatically (or with one click on **Marks** / `/focusmarks`) assigns `Skull` → Focus 1, `Cross` → Focus 2, `Square` → Focus 3, `Moon` → Focus 4, `Triangle` → Focus 5, `Diamond` → Focus 6, `Circle` → Focus 7, and `Star` → Focus 8.
+  - **Leader Sync:** When the Party or Raid Leader assigns or broadcasts Focus targets (`Broadcast` button or `/fsync`), all group members with InteractMod automatically receive the exact Focus 1–9 targets.
+
+---
+
+### 5. Profiles & Quality-of-Life Automation
+- **One-Click Profiles (Top Bar & Minimap Right-Click Menu):**
+  - Built-in **Questing**, **Dungeon / Raid**, **Gathering**, and **City / Safe** profiles (highlighted in green when active).
+  - **Left-Click:** Load profile | **Shift+Left-Click:** Save current settings to that profile | **Right-Click:** Reset profile to defaults.
+  - **Custom / Export / Import:** Save custom named profiles or share profile strings (`IM1:...`) with friends.
+  - **Auto-Switch Profile by Zone:** Automatically switches between `Dungeon / Raid`, `City / Safe`, and `Questing` as you travel.
+- **Quality of Life (Tab 2 — `Filters & QoL`):**
+  - **Auto-Dismount:** Automatically dismounts when you press Interact on an NPC, node, or corpse.
+  - **Interact-to-Mount:** Mounts up when pressing Interact out of combat with no target in range.
+  - **Auto-Sell Grey Items & Auto-Repair:** Automatically sells poor-quality (grey) junk and repairs all gear when visiting a merchant.
+- **Target Blacklist (Tab 3 — `Prompt & BL`):**
+  - Permanently ignore specific annoying NPCs or world objects by clicking **Blacklist Current Prompt** (or pressing its keybind).
+
+---
+
+## Slash Commands Reference
+
+### Main Commands (`/interact` or `/im`)
+| Command | What It Does |
 | :--- | :--- |
-| `/interact` / `/interact ui` | Toggle the 4-tab settings window |
-| `/interact status` | Print current configuration |
-| `/interact cone <15-180>` | Set cone half-angle (degrees) |
-| `/interact range <0-8>` | Set close-proximity radius (yards) |
-| `/interact zdiff <0-20>` | Set max vertical Z difference (`0` = off) |
-| `/interact cycle <0-10000>` | Set cycle penalty window (ms) |
-| `/interact promptpos <x> <y>` | Set prompt frame offset from center |
-| `/interact profile <name>` | Apply built-in or custom profile |
-| `/interact profilesave <name>` | Save current settings to a profile |
-| `/interact profilereset <name\|all>` | Reset built-in profile(s) to defaults |
-| `/interact profiledelete <name>` | Delete a custom profile |
-| `/interact profilelist` | List built-in and custom profiles |
-| `/interact profileexport` / `profileimport <str>` | Export or import `IM1:` profile strings |
-| `/interact bl <add\|remove\|last\|list\|clear>` | Manage entry ID blacklist |
-| `/interact bltarget` | Blacklist current soft-target (or last GO) |
+| `/interact` | Open or close the 4-tab settings window |
+| `/interact status` | Show current settings summary in chat |
+| `/interact profile <name>` | Switch to a profile (`questing`, `raid`, `gathering`, `city`, or custom) |
+| `/interact bltarget` | Add the current prompt target to your blacklist |
+| `/interact sparkles [on\|off]` | Toggle 3D world sparkles on or off |
 | `/interact reset` | Reset all settings and blacklist to defaults |
 
-Toggle commands (`[on|off]` optional): `enemies`, `combatloot`, `prioloot`, `players`, `passivenpcs`, `skiplooted`, `pvpooc`, `ownbobber`, `restoretarget`, `raidmarks`, `protectcc`, `prompt`, `lockprompt`, `promptstack`, `critters`, `los`, `cameracone`, `tapped`, `prioquest`, `priolowhp`, `priocasting`, `autoprofile`, `autodismount`, `fish`, `mount`, `sellgrey`, `autorepair`, `minimap`.
-
-Sparkle command: `/interact sparkles [on|off|herbs|mines|chests|quests]` (optionally followed by `on|off`).
-
-### Focus Commands (Slots `1`РђЊ`9`)
-| Command | Description |
+### Focus Commands (Slots `1`–`9`)
+| Command | What It Does |
 | :--- | :--- |
-| `/focus` / `/focus1`..`/focus9` | Focus current target (or mouseover) into slot 1РђЊ9; `clear` or no target clears (`clearall` clears all 9) |
-| `/autofocus` | Assign current target (or mouseover) to the next free/unassigned Focus slot (`1`РђЊ`9`) |
-| `/clearfocus` / `/clearfocus1`..`/clearfocus9` | Clear focus slot 1РђЊ9 (`/clearfocus all` clears all 9) |
-| `/targetfocus` / `/targetfocus1`..`/targetfocus9` | Target focus unit in slot 1РђЊ9 |
-| `/fcast` / `/fcast1`..`/fcast9 <Spell Name>` | Cast spell on focus slot 1РђЊ9 and restore previous target |
-| `/focusmarks` / `/fmarks` | Populate Focus 1РђЊ8 from active Raid Target Marks (`Skull` Рєњ 1 .. `Star` Рєњ 8) |
-| `/fsync` / `/focussync` | Broadcast all 9 Focus GUID assignments to Party/Raid (Leader only) |
+| `/focus` (or `/focus1` .. `/focus9`) | Set current target (or mouseover) as Focus 1–9; use with no target or `clear` to clear (`/focus clearall` clears all 9) |
+| `/autofocus` | Assign current target (or mouseover) to the next empty Focus slot (`1`–`9`) |
+| `/clearfocus [1..9\|all]` | Clear a specific Focus slot (or `all` to clear all 9) |
+| `/targetfocus` (or `/targetfocus1` .. `/targetfocus9`) | Target the unit in Focus slot 1–9 |
+| `/fcast <Spell Name>` (or `/fcast1` .. `/fcast9 <Spell>`) | Cast a spell directly on Focus 1–9 without losing your current target |
+| `/focusmarks` (or `/fmarks`) | Populate Focus 1–8 from active Raid Target Marks (`Skull` → 1 .. `Star` → 8) |
+| `/fsync` (or `/focussync`) | Broadcast all 9 Focus targets to your Party or Raid (Leader only) |
 
-### Keybindings (`Bindings.xml`)
-- **Interact** (`Interact_Trigger(0)`)
-- **Interact (auto-loot)** (`Interact_Trigger(1)`)
-- **Blacklist Current Prompt / Target** (`Interact_BlacklistCurrent()`)
-- **Set Focus (Current Target)** (`Interact_SetFocus()`)
-- **Clear Focus** (`Interact_ClearFocus()`)
-- **Target Focus** (`Interact_TargetFocus()`)
-
----
-
-## Build & Installation
-
-1. Inject/load `InteractMod.dll` into your WoW 1.12.1 client using your preferred launcher.
-2. Copy the contents of `Interact/` (`Interact.toc`, `Interact.lua`, `Focus.lua`, `Sparkles.lua`, `Bindings.xml`) into `<WoW>\Interface\AddOns\Interact\`.
-4. Launch WoW and configure bindings under **Key Bindings Рєњ Interact**, or open settings with `/interact` (or the minimap button).
