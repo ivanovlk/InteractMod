@@ -10,6 +10,7 @@ local MAX_SPARKLES = 6
 local SPARKLE_COLORS = {
    H = { 0.25, 1.00, 0.35 }, -- Herb: emerald green
    M = { 0.35, 0.85, 1.00 }, -- Mine: icy cyan
+   T = { 0.62, 0.92, 0.22 }, -- Tree / Logging: leaf lime-green
    C = { 1.00, 0.82, 0.18 }, -- Chest: gold
    Q = { 1.00, 0.55, 0.10 }, -- Quest object: bright amber
 }
@@ -129,6 +130,18 @@ for i = 1, MAX_SPARKLES do
    inner:SetBlendMode('ADD')
    sf.inner = inner
 
+   local label = sf:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
+   label:SetPoint('TOP', sf, 'BOTTOM', 0, -1)
+   label:Hide()
+   sf.label = label
+
+   local labelBG = sf:CreateTexture(nil, 'BACKGROUND')
+   labelBG:SetPoint('TOPLEFT', label, 'TOPLEFT', -4, 2)
+   labelBG:SetPoint('BOTTOMRIGHT', label, 'BOTTOMRIGHT', 4, -2)
+   labelBG:SetTexture(0, 0, 0, 0.65)
+   labelBG:Hide()
+   sf.labelBG = labelBG
+
    sf:Hide()
    sparklePool[i] = sf
 end
@@ -147,25 +160,19 @@ local sparkleYs = {}
 local sparkleSs = {}
 local sparkleFrame = CreateFrame('Frame')
 local sparklePhase = 0
-local sparkleElapsed = 0
-local sparkleScanElapsed = 0.066
 sparkleFrame:SetScript('OnUpdate', function()
    local cfg = InteractDB and InteractDB.config
    if not cfg or not cfg.showSparkles or type(InteractNearest) ~= 'function' then
       if sparklesAnyVisible then HideAllSparkles() end
       return
    end
-   if not (cfg.sparkleHerbs or cfg.sparkleMines or cfg.sparkleChests or cfg.sparkleQuests) then
+   if not (cfg.sparkleHerbs or cfg.sparkleMines or cfg.sparkleTrees or cfg.sparkleChests or cfg.sparkleQuests) then
       if sparklesAnyVisible then HideAllSparkles() end
       return
    end
 
    local dt = arg1 or 0.016
    sparklePhase = sparklePhase + dt * 3.5
-   sparkleElapsed = sparkleElapsed + dt
-   sparkleScanElapsed = sparkleScanElapsed + dt
-   if sparkleElapsed < 0.033 then return end
-   sparkleElapsed = 0
 
    local wfW = WorldFrame and WorldFrame:GetWidth() or 0
    local wfH = WorldFrame and WorldFrame:GetHeight() or 0
@@ -174,27 +181,42 @@ sparkleFrame:SetScript('OnUpdate', function()
       return
    end
 
-   if sparkleScanElapsed >= 0.066 then
-      sparkleScanElapsed = 0
-      local x1, y1, s1, x2, y2, s2, x3, y3, s3, x4, y4, s4, x5, y5, s5, x6, y6, s6 = InteractNearest(CMD_QUERY_SPARKLES, wfW / wfH)
-      if not x1 then
-         HideAllSparkles()
-         sparkleXs[1] = nil
-         return
-      end
-      sparkleXs[1], sparkleXs[2], sparkleXs[3], sparkleXs[4], sparkleXs[5], sparkleXs[6] = x1, x2, x3, x4, x5, x6
-      sparkleYs[1], sparkleYs[2], sparkleYs[3], sparkleYs[4], sparkleYs[5], sparkleYs[6] = y1, y2, y3, y4, y5, y6
-      sparkleSs[1], sparkleSs[2], sparkleSs[3], sparkleSs[4], sparkleSs[5], sparkleSs[6] = s1, s2, s3, s4, s5, s6
-   elseif not sparkleXs[1] then
+   local x1, y1, s1, x2, y2, s2, x3, y3, s3, x4, y4, s4, x5, y5, s5, x6, y6, s6 = InteractNearest(CMD_QUERY_SPARKLES, wfW / wfH)
+   if not x1 then
+      HideAllSparkles()
       return
    end
+   sparkleXs[1], sparkleXs[2], sparkleXs[3], sparkleXs[4], sparkleXs[5], sparkleXs[6] = x1, x2, x3, x4, x5, x6
+   sparkleYs[1], sparkleYs[2], sparkleYs[3], sparkleYs[4], sparkleYs[5], sparkleYs[6] = y1, y2, y3, y4, y5, y6
+   sparkleSs[1], sparkleSs[2], sparkleSs[3], sparkleSs[4], sparkleSs[5], sparkleSs[6] = s1, s2, s3, s4, s5, s6
+
+   local curX, curY = 0, 0
+   if GetCursorPosition then
+      local cx, cy = GetCursorPosition()
+      local effScale = (WorldFrame and WorldFrame.GetEffectiveScale and WorldFrame:GetEffectiveScale()) or 1
+      if effScale <= 0 then effScale = 1 end
+      curX = (cx or 0) / effScale
+      curY = (cy or 0) / effScale
+   end
+   local altHeld = (IsAltKeyDown and IsAltKeyDown()) and true or false
 
    local used = 0
    for i = 1, MAX_SPARKLES do
       local nx, ny, tagged = sparkleXs[i], sparkleYs[i], sparkleSs[i]
       if nx and ny and tagged then
          local kind = string.sub(tagged, 1, 1)
-         local objName = string.sub(tagged, 3)
+         local rest = string.sub(tagged, 3)
+         local distYd = 15
+         local objName = rest
+         local sep = string.find(rest, ':', 1, true)
+         if sep then
+            local maybeDist = tonumber(string.sub(rest, 1, sep - 1))
+            if maybeDist then
+               distYd = maybeDist
+               objName = string.sub(rest, sep + 1)
+            end
+         end
+
          local show = false
          local colorKey = kind
 
@@ -202,6 +224,13 @@ sparkleFrame:SetScript('OnUpdate', function()
             show = cfg.sparkleHerbs and true or false
          elseif kind == 'M' then
             show = cfg.sparkleMines and true or false
+         elseif kind == 'T' then
+            if cfg.sparkleQuests and IsQuestSparkleMatch(objName) then
+               show = true
+               colorKey = 'Q'
+            elseif cfg.sparkleTrees ~= false then
+               show = true
+            end
          elseif kind == 'C' then
             if cfg.sparkleQuests and IsQuestSparkleMatch(objName) then
                show = true
@@ -221,15 +250,38 @@ sparkleFrame:SetScript('OnUpdate', function()
             local sf = sparklePool[used]
             local col = SPARKLE_COLORS[colorKey] or SPARKLE_COLORS.C
             local pulse = 0.65 + 0.35 * math.sin(sparklePhase + used * 1.1)
-            local size = 22 + 8 * pulse
+
+            -- Distance scaling (1.22x at <=8 yd down to 0.58x at 55 yd) & fade-out
+            local distT = (distYd - 8) / 47.0
+            if distT < 0 then distT = 0 elseif distT > 1 then distT = 1 end
+            local distScale = 1.22 - 0.64 * distT
+            local distAlpha = 1.0 - 0.55 * distT
+
+            local size = (22 + 8 * pulse) * distScale
+            local px = nx * wfW
+            local py = ny * wfH
             sf:SetWidth(size)
             sf:SetHeight(size)
             sf.inner:SetWidth(size * 0.55)
             sf.inner:SetHeight(size * 0.55)
-            sf.outer:SetVertexColor(col[1], col[2], col[3], 0.85 * pulse)
-            sf.inner:SetVertexColor(1, 1, 1, 0.90 * pulse)
+            sf.outer:SetVertexColor(col[1], col[2], col[3], 0.88 * pulse * distAlpha)
+            sf.inner:SetVertexColor(1, 1, 1, 0.92 * pulse * distAlpha)
             sf:ClearAllPoints()
-            sf:SetPoint('CENTER', WorldFrame, 'BOTTOMLEFT', nx * wfW, ny * wfH)
+            sf:SetPoint('CENTER', WorldFrame, 'BOTTOMLEFT', px, py)
+
+            -- Show nameplate label on mouse hover, center-of-screen look, or when holding Alt
+            local isHovered = (math.abs(curX - px) <= 28 and math.abs(curY - py) <= 28)
+            local isCentered = (used == 1 and math.abs(nx - 0.5) <= 0.09 and math.abs(ny - 0.5) <= 0.09)
+            if isHovered or isCentered or altHeld then
+               sf.label:SetText(string.format('%s (%d yd)', objName, distYd))
+               sf.label:SetTextColor(col[1], col[2], col[3], 1.0)
+               sf.label:Show()
+               sf.labelBG:Show()
+            else
+               sf.label:Hide()
+               sf.labelBG:Hide()
+            end
+
             sf:Show()
          end
       end

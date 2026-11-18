@@ -14,6 +14,7 @@ local CMD_FOCUS_TARGET_TOT = IA.CMD_FOCUS_TARGET_TOT
 local CMD_FOCUS_SET_GUID       = IA.CMD_FOCUS_SET_GUID
 local CMD_FOCUS_GET_GUID       = IA.CMD_FOCUS_GET_GUID
 local CMD_FOCUS_POPULATE_MARKS = IA.CMD_FOCUS_POPULATE_MARKS
+local CMD_FOCUS_SPELL_INFO     = IA.CMD_FOCUS_SPELL_INFO
 local EnsureDB                 = IA.EnsureDB
 local PrintMsg             = IA.PrintMsg
 local SetConfigValue       = IA.SetConfigValue
@@ -21,6 +22,150 @@ local SetConfigValue       = IA.SetConfigValue
 local MAX_FOCUS_SLOTS      = 9
 local FOCUS_ADDON_PREFIX   = 'IM_FOCUS'
 local focusSlots = {}
+
+local DISPEL_NAMES = {
+   [1] = { name = 'Magic',   r = 0.25, g = 0.65, b = 1.00 },
+   [2] = { name = 'Curse',   r = 0.75, g = 0.25, b = 1.00 },
+   [3] = { name = 'Disease', r = 0.75, g = 0.55, b = 0.25 },
+   [4] = { name = 'Poison',  r = 0.20, g = 0.85, b = 0.25 },
+}
+
+local spellInfoCache = {}
+local function GetCachedSpellInfo(spellId)
+   if not spellId or spellId <= 0 or type(InteractNearest) ~= 'function' or not CMD_FOCUS_SPELL_INFO then
+      return nil
+   end
+   local cached = spellInfoCache[spellId]
+   if cached ~= nil then
+      return cached or nil
+   end
+   local name, rank, dispel, durMs = InteractNearest(CMD_FOCUS_SPELL_INFO, spellId)
+   if name and name ~= '' then
+      cached = {
+         name = name,
+         rank = rank or '',
+         dispel = dispel or 0,
+         duration = (durMs and durMs > 0) and (durMs / 1000.0) or 0,
+      }
+      spellInfoCache[spellId] = cached
+      return cached
+   end
+   spellInfoCache[spellId] = false
+   return nil
+end
+
+local CC_EXACT_SPELLS = {
+   ['Polymorph'] = true,
+   ['Polymorph: Pig'] = true,
+   ['Polymorph: Turtle'] = true,
+   ['Polymorph: Cow'] = true,
+   ['Sap'] = true,
+   ['Hibernate'] = true,
+   ['Shackle Undead'] = true,
+   ['Banish'] = true,
+   ['Freezing Trap Effect'] = true,
+   ['Freezing Trap'] = true,
+   ['Wyvern Sting'] = true,
+   ['Scare Beast'] = true,
+   ['Scatter Shot'] = true,
+   ['Blind'] = true,
+   ['Gouge'] = true,
+   ['Kidney Shot'] = true,
+   ['Cheap Shot'] = true,
+   ['Seduction'] = true,
+   ['Fear'] = true,
+   ['Howl of Terror'] = true,
+   ['Psychic Scream'] = true,
+   ['Intimidating Shout'] = true,
+   ['Turn Undead'] = true,
+   ['Repentance'] = true,
+   ['Hammer of Justice'] = true,
+   ['Entangling Roots'] = true,
+   ['Sleep'] = true,
+   ['Mind Control'] = true,
+   ['Enslave Demon'] = true,
+}
+
+local function IsCrowdControlSpell(spellName)
+   if not spellName or spellName == '' then return false end
+   if CC_EXACT_SPELLS[spellName] then return true end
+   if string.find(spellName, 'Polymorph', 1, true)
+      or string.find(spellName, 'Freezing Trap', 1, true)
+      or string.find(spellName, 'Shackle', 1, true)
+      or string.find(spellName, 'Hibernate', 1, true)
+      or string.find(spellName, 'Slumber', 1, true) then
+      return true
+   end
+   return false
+end
+
+local focusSpellScanTip = CreateFrame('GameTooltip', 'InteractFocusSpellScanTooltip', nil, 'GameTooltipTemplate')
+focusSpellScanTip:SetOwner(UIParent, 'ANCHOR_NONE')
+
+local playerSpellCache = {}
+local playerSpellCacheDirty = true
+
+local function RebuildPlayerSpellCache()
+   playerSpellCacheDirty = false
+   playerSpellCache = {}
+   if not GetNumSpellTabs or not GetSpellTabInfo or not GetSpellName then return end
+   local bookType = BOOKTYPE_SPELL or 'spell'
+   local numTabs = GetNumSpellTabs() or 0
+   for t = 1, numTabs do
+      local _, _, offset, numSpells = GetSpellTabInfo(t)
+      if offset and numSpells then
+         for i = offset + 1, offset + numSpells do
+            local sName = GetSpellName(i, bookType)
+            if sName and sName ~= '' then
+               local tex = GetSpellTexture and GetSpellTexture(i, bookType) or nil
+               playerSpellCache[sName] = { slot = i, icon = tex, range = nil }
+            end
+         end
+      end
+   end
+end
+
+local function GetPlayerSpellBookEntry(spellName)
+   if not spellName or spellName == '' then return nil end
+   if playerSpellCacheDirty then
+      RebuildPlayerSpellCache()
+   end
+   local entry = playerSpellCache[spellName]
+   if entry and entry.range == nil then
+      entry.range = 0
+      local bookType = BOOKTYPE_SPELL or 'spell'
+      focusSpellScanTip:ClearLines()
+      focusSpellScanTip:SetSpell(entry.slot, bookType)
+      local nLines = focusSpellScanTip:NumLines() or 0
+      for l = 1, nLines do
+         local rFs = getglobal('InteractFocusSpellScanTooltipTextRight' .. l)
+         local lFs = getglobal('InteractFocusSpellScanTooltipTextLeft' .. l)
+         for _, fsObj in ipairs({ rFs, lFs }) do
+            local txt = fsObj and fsObj:GetText()
+            if txt and txt ~= '' then
+               local _, _, maxYd = string.find(txt, '(%d+)%s*[Yy]d%s*[Rr]ange')
+               if maxYd then
+                  entry.range = tonumber(maxYd) or 0
+                  break
+               elseif string.find(txt, 'Melee Range') then
+                  entry.range = 5
+                  break
+               end
+            end
+         end
+         if entry.range > 0 then break end
+      end
+   end
+   return entry
+end
+
+local spellBookEventFrame = CreateFrame('Frame')
+spellBookEventFrame:RegisterEvent('SPELLS_CHANGED')
+spellBookEventFrame:RegisterEvent('LEARNED_SPELL_IN_TAB')
+spellBookEventFrame:RegisterEvent('PLAYER_ENTERING_WORLD')
+spellBookEventFrame:SetScript('OnEvent', function()
+   playerSpellCacheDirty = true
+end)
 
 local function CreateFocusSlotFrame(slot)
    local suffix = (slot == 1) and '' or tostring(slot)
@@ -227,6 +372,7 @@ local function CreateFocusSlotFrame(slot)
       local row = (i <= 8) and 0 or 1
       local col = (i <= 8) and (i - 1) or (i - 9)
       af:SetPoint('TOPLEFT', f, 'BOTTOMLEFT', 8 + (col * 20), 14 - (row * 20))
+      af:EnableMouse(true)
       local tex = af:CreateTexture(nil, 'ARTWORK')
       tex:SetAllPoints(af)
       af.icon = tex
@@ -243,9 +389,112 @@ local function CreateFocusSlotFrame(slot)
       cnt:SetPoint('BOTTOMRIGHT', af, 'BOTTOMRIGHT', 1, -1)
       cnt:Hide()
       af.count = cnt
+      af:SetScript('OnEnter', function()
+         GameTooltip:SetOwner(this, 'ANCHOR_BOTTOMRIGHT')
+         if this.groupUnit and this.groupAuraIdx then
+            if this.isDebuff then
+               GameTooltip:SetUnitDebuff(this.groupUnit, this.groupAuraIdx)
+            else
+               GameTooltip:SetUnitBuff(this.groupUnit, this.groupAuraIdx)
+            end
+            GameTooltip:Show()
+            return
+         end
+         local info = this.spellId and GetCachedSpellInfo(this.spellId) or nil
+         if info and info.name then
+            local pEntry = GetPlayerSpellBookEntry(info.name)
+            if pEntry and pEntry.slot then
+               GameTooltip:SetSpell(pEntry.slot, BOOKTYPE_SPELL or 'spell')
+               if this.stacks and this.stacks > 1 then
+                  GameTooltip:AddLine('Stacks: ' .. tostring(this.stacks), 1, 0.82, 0)
+               end
+               GameTooltip:AddLine('Known Spell (Your Class)', 0.25, 1.0, 0.35)
+               GameTooltip:Show()
+               return
+            end
+            if info.rank and info.rank ~= '' then
+               GameTooltip:AddDoubleLine(info.name, info.rank, 1, 0.82, 0, 0.7, 0.7, 0.7)
+            else
+               GameTooltip:SetText(info.name, 1, 0.82, 0)
+            end
+            local disp = DISPEL_NAMES[info.dispel or 0]
+            if disp then
+               GameTooltip:AddLine((this.isDebuff and 'Debuff: ' or 'Buff: ') .. disp.name, disp.r, disp.g, disp.b)
+            else
+               GameTooltip:AddLine(this.isDebuff and 'Debuff' or 'Buff', this.isDebuff and 1.0 or 0.3, this.isDebuff and 0.3 or 0.9, 0.3)
+            end
+            if this.stacks and this.stacks > 1 then
+               GameTooltip:AddLine('Stacks: ' .. tostring(this.stacks), 1, 1, 1)
+            end
+            GameTooltip:Show()
+         else
+            GameTooltip:SetText(this.isDebuff and 'Active Debuff' or 'Active Buff', 1, 0.82, 0)
+            if this.stacks and this.stacks > 1 then
+               GameTooltip:AddLine('Stacks: ' .. tostring(this.stacks), 1, 1, 1)
+            end
+            GameTooltip:Show()
+         end
+      end)
+      af:SetScript('OnLeave', function()
+         GameTooltip:Hide()
+      end)
       af:Hide()
       auraFrames[i] = af
    end
+
+   local ccIcons = {}
+   local ccModTags = { 'S', 'C', 'A' }
+   for i = 1, 3 do
+      local cc = CreateFrame('Frame', 'InteractFocusCC' .. suffix .. '_' .. i, overlay)
+      cc:SetWidth(14)
+      cc:SetHeight(14)
+      cc:SetPoint('BOTTOMRIGHT', nameBG, 'TOPRIGHT', -((3 - i) * 16), 2)
+      local cTex = cc:CreateTexture(nil, 'ARTWORK')
+      cTex:SetAllPoints(cc)
+      cc.icon = cTex
+      local cBdr = cc:CreateTexture(nil, 'OVERLAY')
+      cBdr:SetTexture('Interface\\Buttons\\UI-Debuff-Overlays')
+      cBdr:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
+      cBdr:SetWidth(16)
+      cBdr:SetHeight(16)
+      cBdr:SetPoint('CENTER', cc, 'CENTER', 0, 0)
+      cc.border = cBdr
+      local mTxt = cc:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+      mTxt:SetPoint('TOPLEFT', cc, 'TOPLEFT', -1, 2)
+      mTxt:SetText(ccModTags[i])
+      cc.modText = mTxt
+      local cdTxt = cc:CreateFontString(nil, 'OVERLAY', 'NumberFontNormalSmall')
+      cdTxt:SetPoint('CENTER', cc, 'CENTER', 0, 0)
+      cdTxt:Hide()
+      cc.cdText = cdTxt
+      cc:Hide()
+      ccIcons[i] = cc
+   end
+
+   local ccBadge = CreateFrame('Frame', 'InteractFocusCCBadge' .. suffix, overlay)
+   ccBadge:SetWidth(30)
+   ccBadge:SetHeight(30)
+   ccBadge:SetPoint('CENTER', portrait, 'CENTER', 0, 0)
+   local ccBadgeTex = ccBadge:CreateTexture(nil, 'ARTWORK')
+   ccBadgeTex:SetAllPoints(ccBadge)
+   ccBadge.icon = ccBadgeTex
+   local ccBadgeBdr = ccBadge:CreateTexture(nil, 'OVERLAY')
+   ccBadgeBdr:SetTexture('Interface\\Buttons\\UI-Debuff-Overlays')
+   ccBadgeBdr:SetTexCoord(0.296875, 0.5703125, 0, 0.515625)
+   ccBadgeBdr:SetWidth(33)
+   ccBadgeBdr:SetHeight(33)
+   ccBadgeBdr:SetPoint('CENTER', ccBadge, 'CENTER', 0, 0)
+   ccBadgeBdr:SetVertexColor(0.35, 0.85, 1.0)
+   ccBadge.border = ccBadgeBdr
+   local ccBadgeTimer = ccBadge:CreateFontString(nil, 'OVERLAY', 'NumberFontNormal')
+   ccBadgeTimer:SetPoint('CENTER', ccBadge, 'CENTER', 0, 0)
+   ccBadge.timerText = ccBadgeTimer
+   ccBadge:Hide()
+
+   local ccBreakText = overlay:CreateFontString(nil, 'OVERLAY', 'GameFontNormalSmall')
+   ccBreakText:SetPoint('BOTTOM', nameBG, 'TOP', 0, 2)
+   ccBreakText:SetTextColor(1.0, 0.2, 0.2)
+   ccBreakText:Hide()
 
    f:SetScript('OnDragStart', function()
       local unlocked = (InteractDB and InteractDB.config and not InteractDB.config.lockFocus)
@@ -346,8 +595,21 @@ local function CreateFocusSlotFrame(slot)
       castText = castText,
       castIconTex = castIconTex,
       auraFrames = auraFrames,
+      ccIcons = ccIcons,
+      ccBadge = ccBadge,
+      ccBreakText = ccBreakText,
+      ccSpellId = 0,
+      ccSpellName = nil,
+      ccIcon = nil,
+      ccStartTime = 0,
+      ccDuration = 0,
+      ccBreakUntil = 0,
       castStart = 0,
       lastSpellId = 0,
+      isCasting = false,
+      isAlertBlinking = false,
+      isCompact = false,
+      castSpellName = nil,
       wasFriendlyPlayer = false,
       cachedGroupUnit = nil,
       cachedGroupName = nil,
@@ -414,6 +676,13 @@ local function ApplySlotCompactGeometry(fs, compact)
       fs.combatIcon:SetHeight(14)
       fs.levelText:Hide()
 
+      fs.ccBadge:ClearAllPoints()
+      fs.ccBadge:SetPoint('LEFT', fs.hp, 'LEFT', 2, 0)
+      fs.ccBadge:SetWidth(18)
+      fs.ccBadge:SetHeight(18)
+      fs.ccBadge.border:SetWidth(20)
+      fs.ccBadge.border:SetHeight(20)
+
       fs.cast:SetWidth(130)
       fs.cast:SetHeight(10)
       fs.castBorder:Hide()
@@ -479,6 +748,13 @@ local function ApplySlotCompactGeometry(fs, compact)
       fs.combatIcon:SetPoint('CENTER', f, 'BOTTOMRIGHT', -53, 34)
       fs.combatIcon:SetWidth(24)
       fs.combatIcon:SetHeight(24)
+
+      fs.ccBadge:ClearAllPoints()
+      fs.ccBadge:SetPoint('CENTER', fs.portrait, 'CENTER', 0, 0)
+      fs.ccBadge:SetWidth(30)
+      fs.ccBadge:SetHeight(30)
+      fs.ccBadge.border:SetWidth(33)
+      fs.ccBadge.border:SetHeight(33)
 
       fs.alertFlash:ClearAllPoints()
       fs.alertFlash:SetPoint('TOPLEFT', f, 'TOPLEFT', 2, -9)
@@ -1036,11 +1312,33 @@ local function HideFocusAuras(fs)
    end
 end
 
-local function SetFocusAuraSlot(fs, idx, tex, isDebuff, stacks)
+local function SetFocusAuraSlot(fs, idx, tex, isDebuff, stacks, spellId, groupUnit, groupAuraIdx)
    local af = fs.auraFrames[idx]
    if not af then return end
    af.icon:SetTexture(tex)
+   af.isDebuff = isDebuff and true or false
+   af.stacks = stacks or 1
+   af.spellId = spellId
+   af.groupUnit = groupUnit
+   af.groupAuraIdx = groupAuraIdx
+
+   local isMine = false
+   if spellId and spellId > 0 then
+      local info = GetCachedSpellInfo(spellId)
+      if info and info.name and GetPlayerSpellBookEntry(info.name) then
+         isMine = true
+      end
+   end
+
    if isDebuff then
+      if isMine then
+         af.debuffBorder:SetVertexColor(1.0, 0.65, 0.10)
+      else
+         af.debuffBorder:SetVertexColor(0.85, 0.10, 0.10)
+      end
+      af.debuffBorder:Show()
+   elseif isMine then
+      af.debuffBorder:SetVertexColor(0.25, 1.0, 0.35)
       af.debuffBorder:Show()
    else
       af.debuffBorder:Hide()
@@ -1052,6 +1350,127 @@ local function SetFocusAuraSlot(fs, idx, tex, isDebuff, stacks)
       af.count:Hide()
    end
    af:Show()
+end
+
+local function HideFocusClickCastIcons(fs)
+   if not fs.ccIcons then return end
+   for i = 1, 3 do
+      if fs.ccIcons[i] then
+         fs.ccIcons[i]:Hide()
+      end
+   end
+end
+
+local function UpdateFocusClickCastIcons(fs, dist)
+   if not fs.ccIcons then return end
+   local cfg = InteractDB and InteractDB.config
+   if not cfg then
+      HideFocusClickCastIcons(fs)
+      return
+   end
+   local spells = { cfg.focusShiftSpell, cfg.focusCtrlSpell, cfg.focusAltSpell }
+   local bookType = BOOKTYPE_SPELL or 'spell'
+   local now = GetTime()
+   local shownIdx = 0
+   for i = 1, 3 do
+      local cc = fs.ccIcons[i]
+      local sName = spells[i]
+      local entry = (sName and sName ~= '') and GetPlayerSpellBookEntry(sName) or nil
+      if cc and entry and entry.slot and entry.icon then
+         shownIdx = shownIdx + 1
+         cc:ClearAllPoints()
+         cc:SetPoint('BOTTOMRIGHT', fs.nameBG, 'TOPRIGHT', -((shownIdx - 1) * 16), 2)
+         cc.icon:SetTexture(entry.icon)
+         local start, duration, enable = 0, 0, 1
+         if GetSpellCooldown then
+            start, duration, enable = GetSpellCooldown(entry.slot, bookType)
+         end
+         local onCD = (start and duration and start > 0 and duration > 1.5 and (start + duration) > now)
+         local inRange = true
+         if entry.range and entry.range > 0 then
+            if not dist or dist < 0 or dist > entry.range then
+               inRange = false
+            end
+         elseif not dist or dist < 0 then
+            inRange = false
+         end
+
+         if onCD then
+            local rem = math.ceil((start + duration) - now)
+            cc.cdText:SetText((rem > 99) and '99' or tostring(rem))
+            cc.cdText:Show()
+            cc.icon:SetVertexColor(0.45, 0.45, 0.45)
+            cc.border:SetVertexColor(0.55, 0.55, 0.55)
+         elseif not inRange then
+            cc.cdText:Hide()
+            cc.icon:SetVertexColor(1.0, 0.25, 0.25)
+            cc.border:SetVertexColor(0.95, 0.15, 0.15)
+         else
+            cc.cdText:Hide()
+            cc.icon:SetVertexColor(1.0, 1.0, 1.0)
+            cc.border:SetVertexColor(0.20, 0.95, 0.30)
+         end
+         cc:Show()
+      elseif cc then
+         cc:Hide()
+      end
+   end
+end
+
+local function ClearFocusCCState(fs)
+   fs.ccSpellId = 0
+   fs.ccSpellName = nil
+   fs.ccIcon = nil
+   fs.ccStartTime = 0
+   fs.ccDuration = 0
+   fs.ccBreakUntil = 0
+   if fs.ccBadge then fs.ccBadge:Hide() end
+   if fs.ccBreakText then fs.ccBreakText:Hide() end
+end
+
+local function RefreshFocusCCVisuals(fs, now)
+   if not fs then return end
+   local cfg = InteractDB and InteractDB.config
+   if not cfg or cfg.focusCCAlert == false then
+      if fs.ccBadge then fs.ccBadge:Hide() end
+      if fs.ccBreakText then fs.ccBreakText:Hide() end
+      return
+   end
+
+   if fs.ccSpellId and fs.ccSpellId > 0 and fs.ccIcon then
+      if fs.ccBreakText then fs.ccBreakText:Hide() end
+      fs.ccBadge.icon:SetTexture(fs.ccIcon)
+      local elapsed = now - (fs.ccStartTime or now)
+      if elapsed < 0 then elapsed = 0 end
+      local dur = fs.ccDuration or 0
+      if dur > 0 then
+         local rem = dur - elapsed
+         if rem < 0 then rem = 0 end
+         if rem <= 6.0 then
+            fs.ccBadge.border:SetVertexColor(1.0, 0.25, 0.15)
+            fs.ccBadge.timerText:SetTextColor(1.0, 0.30, 0.20)
+            fs.ccBadge.timerText:SetText(string.format('%.1f', rem))
+         else
+            fs.ccBadge.border:SetVertexColor(0.35, 0.85, 1.0)
+            fs.ccBadge.timerText:SetTextColor(1.0, 0.90, 0.25)
+            fs.ccBadge.timerText:SetText(string.format('%ds', math.ceil(rem)))
+         end
+      else
+         fs.ccBadge.border:SetVertexColor(0.35, 0.85, 1.0)
+         fs.ccBadge.timerText:SetTextColor(1.0, 0.90, 0.25)
+         fs.ccBadge.timerText:SetText(string.format('%ds', math.floor(elapsed)))
+      end
+      fs.ccBadge:Show()
+   else
+      if fs.ccBadge then fs.ccBadge:Hide() end
+      if fs.ccBreakUntil and fs.ccBreakUntil > now then
+         local pulse = 0.55 + 0.45 * math.sin(now * 14.0)
+         fs.ccBreakText:SetAlpha(pulse)
+         fs.ccBreakText:Show()
+      elseif fs.ccBreakText then
+         fs.ccBreakText:Hide()
+      end
+   end
 end
 
 local function SetFocusClassificationBorder(fs, classification)
@@ -1069,6 +1488,8 @@ end
 
 local function SetFocusCastAlert(fs, compact, active, blink)
    if active then
+      fs.isAlertBlinking = true
+      fs.isCompact = compact
       if compact then
          fs.borderGlow:Hide()
          fs.frame:SetBackdropBorderColor(1.0, 0.1, 0.1, 0.35 + 0.65 * blink)
@@ -1086,6 +1507,7 @@ local function SetFocusCastAlert(fs, compact, active, blink)
       end
       fs.alertFlash:Show()
    else
+      fs.isAlertBlinking = false
       fs.border:SetVertexColor(1.0, 1.0, 1.0)
       fs.borderGlow:Hide()
       fs.portrait:SetVertexColor(1.0, 1.0, 1.0)
@@ -1120,6 +1542,7 @@ local function UpdateFocusSlot(slot)
       fs.wasFriendlyPlayer = false
       fs.lastAuraIcons = nil
       fs.lastSpellId = 0
+      fs.isCasting = false
       SetFocusCastAlert(fs, compact, false, 0)
       if showPreview then
          fs.frame:SetAlpha(0.85)
@@ -1150,6 +1573,8 @@ local function UpdateFocusSlot(slot)
          fs.tot:Hide()
          fs.cast:Hide()
          HideFocusAuras(fs)
+         HideFocusClickCastIcons(fs)
+         ClearFocusCCState(fs)
          fs.frame:Show()
       else
          fs.frame:Hide()
@@ -1242,7 +1667,10 @@ local function UpdateFocusSlot(slot)
       raidMark = GetRaidTargetIndex(groupUnit) or raidMark
       fs.tot:Hide()
       fs.cast:Hide()
+      fs.isCasting = false
       SetFocusCastAlert(fs, compact, false, 0)
+      UpdateFocusClickCastIcons(fs, 100)
+      ClearFocusCCState(fs)
 
       if InteractDB.config.showFocusAuras then
          fs.lastAuraIcons = nil
@@ -1250,7 +1678,7 @@ local function UpdateFocusSlot(slot)
          for i = 1, 8 do
             local tex, apps = UnitBuff(groupUnit, i)
             if tex and bIdx <= 8 then
-               SetFocusAuraSlot(fs, bIdx, tex, false, apps or 1)
+               SetFocusAuraSlot(fs, bIdx, tex, false, apps or 1, nil, groupUnit, i)
                bIdx = bIdx + 1
                hasBuffs = true
             end
@@ -1262,7 +1690,7 @@ local function UpdateFocusSlot(slot)
          for i = 1, 8 do
             local tex, apps = UnitDebuff(groupUnit, i)
             if tex and dIdx <= 16 then
-               SetFocusAuraSlot(fs, dIdx, tex, true, apps or 1)
+               SetFocusAuraSlot(fs, dIdx, tex, true, apps or 1, nil, groupUnit, i)
                dIdx = dIdx + 1
                hasDebuffs = true
             end
@@ -1290,8 +1718,11 @@ local function UpdateFocusSlot(slot)
       fs.combatIcon:Hide()
       fs.tot:Hide()
       fs.cast:Hide()
+      fs.isCasting = false
       SetFocusCastAlert(fs, compact, false, 0)
       HideFocusAuras(fs)
+      HideFocusClickCastIcons(fs)
+      ClearFocusCCState(fs)
       if not compact then
          SetPortraitToTexture(fs.portrait, 'Interface\\Icons\\Ability_Tracking')
       end
@@ -1414,12 +1845,17 @@ local function UpdateFocusSlot(slot)
          fs.tot:Hide()
       end
 
-      if InteractDB.config.showFocusAuras and auraIcons and auraIcons ~= '' then
-         if auraIcons == fs.lastAuraIcons then
+      if auraIcons and auraIcons ~= '' then
+         if auraIcons == fs.lastAuraIcons and InteractDB.config.showFocusAuras then
             hasBuffs = fs.lastHasBuffs
             hasDebuffs = fs.lastHasDebuffs
          else
             fs.lastAuraIcons = auraIcons
+            fs.detectedCCId = 0
+            fs.detectedCCName = nil
+            fs.detectedCCTex = nil
+            fs.detectedCCDur = 0
+            local showAuras = InteractDB.config.showFocusAuras and true or false
             local bIdx = 1
             local dIdx = 9
             local pos = 1
@@ -1439,42 +1875,96 @@ local function UpdateFocusSlot(slot)
                   local tex = s1 and string.sub(item, 1, s1 - 1) or item
                   local isDebuff = false
                   local stacks = 1
+                  local auraSpellId = nil
                   if s1 then
                      local s2 = string.find(item, ';', s1 + 1, true)
                      local dStr = s2 and string.sub(item, s1 + 1, s2 - 1) or string.sub(item, s1 + 1)
                      isDebuff = (tonumber(dStr) == 1)
                      if s2 then
-                        stacks = tonumber(string.sub(item, s2 + 1)) or 1
+                        local s3 = string.find(item, ';', s2 + 1, true)
+                        if s3 then
+                           stacks = tonumber(string.sub(item, s2 + 1, s3 - 1)) or 1
+                           auraSpellId = tonumber(string.sub(item, s3 + 1))
+                        else
+                           stacks = tonumber(string.sub(item, s2 + 1)) or 1
+                        end
                      end
                   end
-                  if tex and tex ~= '' then
+                  if isDebuff and auraSpellId and auraSpellId > 0 and fs.detectedCCId == 0 then
+                     local sInfo = GetCachedSpellInfo(auraSpellId)
+                     if sInfo and sInfo.name and IsCrowdControlSpell(sInfo.name) then
+                        fs.detectedCCId = auraSpellId
+                        fs.detectedCCName = sInfo.name
+                        fs.detectedCCTex = tex
+                        fs.detectedCCDur = sInfo.duration or 0
+                     end
+                  end
+                  if showAuras and tex and tex ~= '' then
                      if isDebuff and dIdx <= 16 then
-                        SetFocusAuraSlot(fs, dIdx, tex, true, stacks)
+                        SetFocusAuraSlot(fs, dIdx, tex, true, stacks, auraSpellId)
                         dIdx = dIdx + 1
                         hasDebuffs = true
                      elseif not isDebuff and bIdx <= 8 then
-                        SetFocusAuraSlot(fs, bIdx, tex, false, stacks)
+                        SetFocusAuraSlot(fs, bIdx, tex, false, stacks, auraSpellId)
                         bIdx = bIdx + 1
                         hasBuffs = true
                      end
                   end
                end
             end
-            for i = bIdx, 8 do
-               fs.auraFrames[i]:Hide()
+            if showAuras then
+               for i = bIdx, 8 do
+                  fs.auraFrames[i]:Hide()
+               end
+               for i = dIdx, 16 do
+                  fs.auraFrames[i]:Hide()
+               end
+               fs.lastHasBuffs = hasBuffs
+               fs.lastHasDebuffs = hasDebuffs
+            else
+               HideFocusAuras(fs)
             end
-            for i = dIdx, 16 do
-               fs.auraFrames[i]:Hide()
-            end
-            fs.lastHasBuffs = hasBuffs
-            fs.lastHasDebuffs = hasDebuffs
          end
       else
+         fs.detectedCCId = 0
          HideFocusAuras(fs)
       end
 
+      if hp <= 0 then
+         ClearFocusCCState(fs)
+      else
+         local nowCC = GetTime()
+         if fs.detectedCCId and fs.detectedCCId > 0 then
+            if fs.detectedCCId ~= fs.ccSpellId then
+               fs.ccSpellId = fs.detectedCCId
+               fs.ccSpellName = fs.detectedCCName
+               fs.ccIcon = fs.detectedCCTex
+               fs.ccStartTime = nowCC
+               fs.ccDuration = fs.detectedCCDur or 0
+               fs.ccBreakUntil = 0
+            end
+         elseif fs.ccSpellId and fs.ccSpellId > 0 then
+            local ccElapsed = nowCC - (fs.ccStartTime or nowCC)
+            if InteractDB.config.focusCCAlert ~= false then
+               local brokeEarly = (fs.ccDuration == 0) or (ccElapsed < (fs.ccDuration - 1.5))
+               local label = brokeEarly and ('! ' .. (fs.ccSpellName or 'CC') .. ' BROKE !') or ((fs.ccSpellName or 'CC') .. ' Ended')
+               fs.ccBreakText:SetText(label)
+               fs.ccBreakUntil = nowCC + 3.0
+               PrintMsg(string.format('Focus %d (%s): |cffff4040%s %s!|r (%.1fs)', slot, name or 'Target', fs.ccSpellName or 'CC', brokeEarly and 'BROKE' or 'expired', ccElapsed))
+               if PlaySound then
+                  PlaySound('igQuestFailed')
+               end
+            end
+            fs.ccSpellId = 0
+         end
+         RefreshFocusCCVisuals(fs, nowCC)
+      end
+
+      UpdateFocusClickCastIcons(fs, dist)
+
       local castSpellId = 0
       local isChannel = 0
+      local castTimeMs = 0
       local castSpellName = nil
       local castIcon = nil
       if castInfo and castInfo ~= '' then
@@ -1486,8 +1976,21 @@ local function UpdateFocusSlot(slot)
                isChannel = tonumber(string.sub(castInfo, c1 + 1, c2 - 1)) or 0
                local c3 = string.find(castInfo, ';', c2 + 1, true)
                if c3 then
-                  castSpellName = string.sub(castInfo, c2 + 1, c3 - 1)
-                  castIcon = string.sub(castInfo, c3 + 1)
+                  local thirdField = string.sub(castInfo, c2 + 1, c3 - 1)
+                  local maybeMs = tonumber(thirdField)
+                  if maybeMs then
+                     castTimeMs = maybeMs
+                     local c4 = string.find(castInfo, ';', c3 + 1, true)
+                     if c4 then
+                        castSpellName = string.sub(castInfo, c3 + 1, c4 - 1)
+                        castIcon = string.sub(castInfo, c4 + 1)
+                     else
+                        castSpellName = string.sub(castInfo, c3 + 1)
+                     end
+                  else
+                     castSpellName = thirdField
+                     castIcon = string.sub(castInfo, c3 + 1)
+                  end
                else
                   castSpellName = string.sub(castInfo, c2 + 1)
                end
@@ -1496,14 +1999,21 @@ local function UpdateFocusSlot(slot)
       end
 
       if castSpellId and castSpellId > 0 and castSpellName and castSpellName ~= '' then
-         if castSpellId ~= fs.lastSpellId then
+         local durSec = (castTimeMs and castTimeMs > 0) and (castTimeMs / 1000.0) or 0
+         local now = GetTime()
+         if castSpellId ~= fs.lastSpellId or (durSec > 0 and (now - fs.castStart) > (durSec + 0.15)) then
             fs.lastSpellId = castSpellId
-            fs.castStart = GetTime()
+            fs.castStart = now
             if InteractDB.config.focusCastSound and PlaySound then
                PlaySound('RaidWarning')
             end
          end
-         local elapsed = GetTime() - fs.castStart
+         fs.isCasting = true
+         fs.isCompact = compact
+         fs.isChannel = (isChannel == 1)
+         fs.castDuration = durSec
+         fs.castSpellName = castSpellName
+         local elapsed = now - fs.castStart
          if InteractDB.config.focusCastAlert then
             local blink = 0.5 + 0.5 * math.sin(elapsed * 12.0)
             SetFocusCastAlert(fs, compact, true, blink)
@@ -1530,16 +2040,27 @@ local function UpdateFocusSlot(slot)
             else
                fs.castIconTex:Hide()
             end
-            local fill = elapsed - math.floor(elapsed / 2.0) * 2.0
-            fs.cast:SetMinMaxValues(0, 2.0)
-            fs.cast:SetValue(fill)
-            fs.castText:SetText(string.format('%s (%.1fs)', castSpellName, elapsed))
+            if durSec > 0 then
+               local clamped = (elapsed > durSec) and durSec or elapsed
+               local fill = (isChannel == 1) and (durSec - clamped) or clamped
+               fs.cast:SetMinMaxValues(0, durSec)
+               fs.cast:SetValue(fill)
+               fs.castText:SetText(string.format('%s (%.1f / %.1fs)', castSpellName, clamped, durSec))
+            else
+               local fill = elapsed - math.floor(elapsed / 2.0) * 2.0
+               fs.cast:SetMinMaxValues(0, 2.0)
+               fs.cast:SetValue(fill)
+               fs.castText:SetText(string.format('%s (%.1fs)', castSpellName, elapsed))
+            end
             fs.cast:Show()
          else
             fs.castIconTex:Hide()
             fs.cast:Hide()
          end
       else
+         fs.isCasting = false
+         fs.castDuration = 0
+         fs.castSpellName = nil
          fs.lastSpellId = 0
          SetFocusCastAlert(fs, compact, false, 0)
          fs.castIconTex:Hide()
@@ -1575,6 +2096,42 @@ local function UpdateFocusFrame()
       UpdateFocusSlot(slot)
    end
 end
+
+local focusAnimFrame = CreateFrame('Frame')
+focusAnimFrame:SetScript('OnUpdate', function()
+   local now = GetTime()
+   for slot = 1, MAX_FOCUS_SLOTS do
+      local fs = focusSlots[slot]
+      if fs and fs.frame:IsVisible() then
+         if (fs.ccSpellId and fs.ccSpellId > 0) or (fs.ccBreakUntil and fs.ccBreakUntil > 0) then
+            RefreshFocusCCVisuals(fs, now)
+         end
+         if fs.isCasting then
+            local elapsed = now - fs.castStart
+            if elapsed < 0 then elapsed = 0 end
+            if fs.isAlertBlinking then
+               local blink = 0.5 + 0.5 * math.sin(elapsed * 12.0)
+               SetFocusCastAlert(fs, fs.isCompact, true, blink)
+            end
+            if fs.cast:IsVisible() then
+               local durSec = fs.castDuration or 0
+               if durSec > 0 then
+                  local clamped = (elapsed > durSec) and durSec or elapsed
+                  local fill = fs.isChannel and (durSec - clamped) or clamped
+                  fs.cast:SetMinMaxValues(0, durSec)
+                  fs.cast:SetValue(fill)
+                  fs.castText:SetText(string.format('%s (%.1f / %.1fs)', fs.castSpellName or '', clamped, durSec))
+               else
+                  local fill = elapsed - math.floor(elapsed / 2.0) * 2.0
+                  fs.cast:SetMinMaxValues(0, 2.0)
+                  fs.cast:SetValue(fill)
+                  fs.castText:SetText(string.format('%s (%.1fs)', fs.castSpellName or '', elapsed))
+               end
+            end
+         end
+      end
+   end
+end)
 
 IA.RegisterFocusModule(UpdateFocusFrameStyle, UpdateFocusFrame)
 

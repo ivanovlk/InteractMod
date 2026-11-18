@@ -18,7 +18,7 @@ end
 -- ============================================================================
 -- DLL Command Protocol (matches InteractCommand / ConfigKey in dllmain.cpp)
 -- ============================================================================
-local ADDON_VERSION            = '2.0.0'
+local ADDON_VERSION            = '2.1.0'
 
 local CMD_BLACKLIST_CLEAR      = 100
 local CMD_BLACKLIST_ADD        = 101
@@ -44,6 +44,7 @@ local CMD_FOCUS_TARGET_TOT     = 406
 local CMD_FOCUS_SET_GUID       = 407
 local CMD_FOCUS_GET_GUID       = 408
 local CMD_FOCUS_POPULATE_MARKS = 409
+local CMD_FOCUS_SPELL_INFO     = 410
 
 local CONFIG_KEYS = {
    coneAngle        = 1,
@@ -139,6 +140,7 @@ local DEFAULT_CONFIG = {
    autoFocusMarks   = false,
    focusCastAlert   = true,
    focusCastSound   = false,
+   focusCCAlert     = true,
    autoClearDeadFocus = false,
    dimOutOfRangeFocus = true,
    focusShiftSpell  = '',
@@ -150,6 +152,7 @@ local DEFAULT_CONFIG = {
    showSparkles     = true,
    sparkleHerbs     = true,
    sparkleMines     = true,
+   sparkleTrees     = true,
    sparkleChests    = true,
    sparkleQuests    = true,
    sparkleFov       = 90,
@@ -1041,9 +1044,10 @@ local function BuildConfigUI()
    CreateSlider(t3, 'InteractPromptAlphaSlider', 'promptAlpha', 'Prompt Frame Opacity', 'Frame Alpha: %.2f', 0.0, 1.0, 0.05, '0.0', '1.0', 248, -126)
    CreateSlider(t3, 'InteractSparkleFovSlider', 'sparkleFov', 'Sparkle Projection', 'Sparkle Projection: %d (90=Default)', 40, 150, 1, '40', '150', 26, -170)
    CreateCheckbox(t3, 'InteractCBSparkleHerbs',  'sparkleHerbs',  'Herbs',  'Show 3D world sparkles over nearby herbalism nodes.', 248, -156)
-   CreateCheckbox(t3, 'InteractCBSparkleMines',  'sparkleMines',  'Mines',  'Show 3D world sparkles over nearby mining mineral veins.', 348, -156)
+   CreateCheckbox(t3, 'InteractCBSparkleMines',  'sparkleMines',  'Mines',  'Show 3D world sparkles over nearby mining mineral veins.', 318, -156)
+   CreateCheckbox(t3, 'InteractCBSparkleTrees',  'sparkleTrees',  'Trees',  'Show 3D world sparkles over nearby choppable trees and lumber nodes.', 388, -156)
    CreateCheckbox(t3, 'InteractCBSparkleChests', 'sparkleChests', 'Chests', 'Show 3D world sparkles over nearby treasure chests and footlockers.', 248, -178)
-   CreateCheckbox(t3, 'InteractCBSparkleQuests', 'sparkleQuests', 'Quests', 'Show 3D world sparkles over nearby active quest objects.', 348, -178)
+   CreateCheckbox(t3, 'InteractCBSparkleQuests', 'sparkleQuests', 'Quests', 'Show 3D world sparkles over nearby active quest objects.', 318, -178)
 
    CreateSectionHeader(t3, 'Entry ID Blacklist (NPCs & Objects)', 22, -208)
 
@@ -1167,6 +1171,7 @@ local function BuildConfigUI()
    CreateCheckbox(t4, 'InteractCBCastSound', 'focusCastSound', 'Sound Alert on Cast Start', 'Play a warning sound when any Focus 1..9 starts casting or channeling a spell.', 248, -112)
    CreateCheckbox(t4, 'InteractCBAutoClearDead', 'autoClearDeadFocus', 'Auto-Clear Dead Focus', 'Automatically clear a Focus slot when a non-player target dies.', 22, -134)
    CreateCheckbox(t4, 'InteractCBDimOOR', 'dimOutOfRangeFocus', 'Dim Out-of-Range / No-LoS', 'Dim Focus frames to 45% opacity when >40 yd away or out of Line of Sight.', 248, -134)
+   CreateCheckbox(t4, 'InteractCBFocusCCAlert', 'focusCCAlert', 'CC Tracker & Break Alert', 'Show active Crowd-Control countdown badge on Focus frames and alert when CC breaks.', 248, -162)
 
    CreateSlider(t4, 'InteractFocusScaleSlider', 'focusScale', 'Focus Frame Scale', 'Focus Scale: %.2fx', 0.4, 1.5, 0.05, '0.4x', '1.5x', 26, -170)
    CreateSlider(t4, 'InteractFocusXSlider', 'focusX', 'Focus X Offset', 'Focus X: %d px', -800, 800, 5, '-800', '800', 26, -216)
@@ -2481,6 +2486,7 @@ InteractAddon.CMD_FOCUS_TARGET_TOT = CMD_FOCUS_TARGET_TOT
 InteractAddon.CMD_FOCUS_SET_GUID       = CMD_FOCUS_SET_GUID
 InteractAddon.CMD_FOCUS_GET_GUID       = CMD_FOCUS_GET_GUID
 InteractAddon.CMD_FOCUS_POPULATE_MARKS = CMD_FOCUS_POPULATE_MARKS
+InteractAddon.CMD_FOCUS_SPELL_INFO     = CMD_FOCUS_SPELL_INFO
 InteractAddon.CMD_QUERY_SPARKLES       = CMD_QUERY_SPARKLES
 InteractAddon.EnsureDB             = EnsureDB
 InteractAddon.PrintMsg             = PrintMsg
